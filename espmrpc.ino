@@ -5,7 +5,10 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
+#include <mrpc.h>
 
+using namespace MRPC;
+Node *mrpc;
 ESP8266WebServer server(80);
 StaticJsonBuffer<2048> jsonBuffer;
 
@@ -93,6 +96,11 @@ bool validWifiSettings() {
   return true;
 }
 
+JsonVariant temperature(Service *self, StaticJsonBuffer<1024> *jsonBuffer) {
+  Serial.println("Sending temperature");
+    return 75;
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println();
@@ -137,9 +145,18 @@ void setup() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/connect", HTTP_GET, handleConnect);
   server.begin();
+  mrpc = new Node();
+    Transport *trans = new UDPTransport(50123);
+    Service simpleService = Service();
+    //simpleService.add_publisher("temperature", &temperature, "/LivingRoom", 1000);
+    mrpc->register_service("/SimpleService", &simpleService);
+    mrpc->use_transport(trans);
+  
 }
 
 void loop() {
   server.handleClient();
+  mrpc->poll();
+  delay(50);
 }
 
