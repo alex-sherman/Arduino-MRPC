@@ -1,5 +1,5 @@
 
-#include <ArduinoJson.h>
+#include <aJSON.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -10,24 +10,24 @@
 using namespace MRPC;
 Node *mrpc;
 ESP8266WebServer server(80);
-StaticJsonBuffer<2048> jsonBuffer;
 
-JsonObject& loadSettings() {
+aJsonObject& loadSettings() {
   EEPROM.begin(1024);
   char json[1024];
   EEPROM.get(0, json);
-  JsonObject& object = jsonBuffer.parseObject(json);
-  if(object.success()) {
-    return object;
+  aJsonObject *output = aJson.parse(json);
+  if(!output) {
+    return *aJson.createObject();
   }
-  return jsonBuffer.createObject();
+  return *output;
 }
 
-JsonObject& settings = loadSettings();
+aJsonObject& eepromJSON = loadSettings();
 
 void saveSettings() {
   char json[1024];
-  settings.printTo(json, sizeof(json));
+  char *_json = aJson.print(&eepromJSON);
+  strncpy(json, _json, sizeof(json));
   Serial.println(json);
   EEPROM.put(0, json);
   EEPROM.commit();
@@ -78,9 +78,9 @@ void handleRoot() {
 
 void handleConnect() {
   if(server.hasArg("ssid") && server.hasArg("password")) {
-    JsonObject& wifi_settings = settings.get("wifi").as<JsonObject>();
-    wifi_settings["ssid"] = server.arg("ssid");
-    wifi_settings["password"] = server.arg("password");
+    aJsonObject& wifi_settings = eepromJSON["wifi"];
+    wifi_settings.set("ssid", *aJson.createItem(server.arg("ssid")));
+    wifi_settings.set("password", *aJson.createItem(server.arg("password")));
     saveSettings();
     server.send(200, "text/html", "Successfully saved settings");
   }
@@ -89,21 +89,23 @@ void handleConnect() {
 }
 
 bool validWifiSettings() {
-  if(settings["wifi"] == NULL) return false;
-  if(!settings.get("wifi").is<JsonObject>()) return false;
-  JsonObject& wifi_settings = settings.get("wifi").as<JsonObject>();
-  if(wifi_settings.get<const char*>("ssid") == NULL || wifi_settings.get<const char*>("password") == NULL) return false;
+  aJsonObject& wifi_settings = eepromJSON.get("wifi");
+  if(wifi_settings["ssid"].isNull() || wifi_settings["password"].isNull()) return false;
   return true;
 }
 
-JsonVariant temperature(Service *self, StaticJsonBuffer<1024> *jsonBuffer) {
+aJsonObject temperature(Service *self) {
   Serial.println("Sending temperature");
-    return 75;
+  aJsonObject out;
+  out.valueint = 75;
+  out.type = aJson_Int;
+  return out;
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.println();
+  loadSettings();
   char json[1024];
   EEPROM.get(0, json);
   Serial.print("EEPROM Contents: ");
@@ -112,11 +114,11 @@ void setup() {
   bool createAP = true;
   if(validWifiSettings()) {
     Serial.println("Found wifi settings:");
-    JsonObject& wifi_settings = settings.get("wifi").as<JsonObject>();
+    aJsonObject& wifi_settings = eepromJSON["wifi"];
     wifi_settings.printTo(Serial);
     Serial.println();
     
-    WiFi.begin(wifi_settings.get<const char*>("ssid"), wifi_settings.get<const char*>("password"));
+    WiFi.begin(wifi_settings["ssid"].valuestring, wifi_settings["password"].valuestring);
     Serial.println("Connecting to WiFi");
     for(int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
       delay(500);
@@ -133,7 +135,7 @@ void setup() {
       Serial.println("Connection failed");
   }
   else {
-    settings.createNestedObject("wifi");
+    eepromJSON.set("wifi", *aJson.createObject());
     Serial.println("Couldn't find WiFi settings");
   }
 
