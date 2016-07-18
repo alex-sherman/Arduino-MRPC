@@ -12,20 +12,20 @@ Node *mrpc;
 ESP8266WebServer server(80);
 
 
-Json::Object loadSettings() {
+Json::Object &loadSettings() {
   EEPROM.begin(1024);
   char json[1024];
   EEPROM.get(0, json);
   Json::Value output = Json::parse(json);
   if(!output.isObject()) {
-    return Json::Object();
+    return *(new Json::Object());
   }
   else {
     return output.asObject();
   }
 }
 
-Json::Object eepromJSON = loadSettings();
+Json::Object &eepromJSON = loadSettings();
 
 void saveSettings() {
   Json::print(eepromJSON, Serial);
@@ -81,7 +81,7 @@ void handleRoot() {
 
 void handleConnect() {
   if(server.hasArg("ssid") && server.hasArg("password")) {
-    Json::Object wifi_settings = eepromJSON["wifi"].asObject();
+    Json::Object &wifi_settings = eepromJSON["wifi"].asObject();
     wifi_settings["ssid"] = server.arg("ssid");
     wifi_settings["password"] = server.arg("password");
     saveSettings();
@@ -95,7 +95,7 @@ bool validWifiSettings() {
   Serial.println("A");
   if(!eepromJSON["wifi"].isObject()) return false;
   Serial.println("B");
-  Json::Object wifi_settings = eepromJSON["wifi"].asObject();
+  Json::Object &wifi_settings = eepromJSON["wifi"].asObject();
   if(!wifi_settings["ssid"].isString() || !wifi_settings["password"].isString()) return false;
   return true;
 }
@@ -116,7 +116,7 @@ void setup() {
   bool createAP = true;
   if(validWifiSettings()) {
     Serial.println("Found wifi settings:");
-    Json::Object wifi_settings = eepromJSON["wifi"].asObject();
+    Json::Object &wifi_settings = eepromJSON["wifi"].asObject();
     Json::print(wifi_settings, Serial);
     Serial.println();
     
@@ -151,9 +151,9 @@ void setup() {
   server.begin();
   mrpc = new Node();
     Transport *trans = new UDPTransport(50123);
-    Service simpleService = Service();
-    //simpleService.add_publisher("temperature", &temperature, "/LivingRoom", 1000);
-    mrpc->register_service("/SimpleService", &simpleService);
+    Service *simpleService = new Service();
+    simpleService->add_publisher("temperature", &temperature, "/LivingRoom", 1000);
+    mrpc->register_service("/SimpleService", simpleService);
     mrpc->use_transport(trans);
   
 }
